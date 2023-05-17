@@ -26,17 +26,15 @@ const SidebarChatList: FC<SidebarChatListProps> = ({ friends, sessionId }) => {
   //below will only show messages that are unseen while you were online
   const [unseenMessages, setUnseenMessages] = useState<Message[]>([]);
 
-  // const [activeChats, setActiveChats] = useState<User[]>(friends);
+  const [activeChats, setActiveChats] = useState<User[]>(friends);
 
   //subscribe to chats and friendrequests
   useEffect(() => {
     pusherClient.subscribe(toPusherKey(`user:${sessionId}:chats`));
     pusherClient.subscribe(toPusherKey(`user:${sessionId}:friends`));
 
-    const newFriendHandler = () => {
-      // console.log("received new friend");
-      // setActiveChats((prev) => [...prev, friend]);
-      router.refresh();
+    const newFriendHandler = (newFriend: User) => {
+      setActiveChats((prev) => [...prev, newFriend]);
     };
 
     //we only want to listen to one event

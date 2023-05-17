@@ -38,22 +38,40 @@ export async function POST(req: Request) {
         status: 400,
       });
     }
-    //notify added user
-    pusherServer.trigger(
-      toPusherKey(`user:${idToAdd}:friends`),
-      "new_friend",
-      {}
-    );
 
-    //add to each others friends list
-    await db.sadd(`user:${session.user.id}:friends`, idToAdd);
-    await db.sadd(`user:${idToAdd}:friends`, session.user.id);
-    //sadd = set add vs srem = set remove
+    const [rawUser, rawFriend] = (await Promise.all([
+      fetchRedis(`get`, `user:${session.user.id}`),
+      fetchRedis(`get`, `user:${idToAdd}`),
+    ])) as [string, string];
 
-    //can implement below later
-    // await db.srem(`user:${idToAdd}:outbound_friend_requests`, session.user.id);
-    //idToAdd is the person who sent the request
-    await db.srem(`user:${session.user.id}:incoming_friend_requests`, idToAdd);
+    const user = JSON.parse(rawUser);
+    const friend = JSON.parse(rawFriend);
+
+    //all below requests can happen simultaneously.. refactorting to make it faster
+    await Promise.all([
+      //friend gets your data and vice versa
+      pusherServer.trigger(
+        toPusherKey(`user:${idToAdd}:friends`),
+        "new_friend",
+        user
+      ),
+      pusherServer.trigger(
+        toPusherKey(`user:${session.user.id}:friends`),
+        "new_friend",
+        friend
+      ),
+      //add to each others friends list
+      await db.sadd(`user:${session.user.id}:friends`, idToAdd),
+      await db.sadd(`user:${idToAdd}:friends`, session.user.id),
+      //sadd = set add vs srem = set remove
+
+      await db.srem(
+        `user:${session.user.id}:incoming_friend_requests`,
+        idToAdd
+      ),
+      //can implement below later
+      // await db.srem(`user:${idToAdd}:outbound_friend_requests`, session.user.id);
+    ]);
 
     return new Response("OK");
   } catch (error) {
